@@ -22,6 +22,17 @@
 #define FMT_OUTPUT "ECE568-SERVER: %s %s\n"
 #define FMT_INCOMPLETE_CLOSE "ECE568-SERVER: Incomplete shutdown\n"
 
+SSL_CTX ctx = nullptr;
+
+void initOpenSSL(){
+  SSL_library_init(); /* encryption & hash algorithms for SSL */
+  SSL_load_error_strings(); /* error strings */
+}
+
+void setupSSLContext(){
+  ctx = SSL_CTX_new(SSLv3_server_method()); // sslv3 method
+}
+
 int main(int argc, char **argv)
 {
   int s, sock, port=PORT;

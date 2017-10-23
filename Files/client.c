@@ -26,11 +26,16 @@
 #define FMT_NO_VERIFY "ECE568-CLIENT: Certificate does not verify\n"
 #define FMT_INCORRECT_CLOSE "ECE568-CLIENT: Premature close\n"
 
-int openSSLSetup(){
+SSL_CTX ctx = nullptr;
+
+void initOpenSSL(){
   SSL_library_init(); /* encryption & hash algorithms for SSL */
   SSL_load_error_strings(); /* error strings */
-  ERR_load_BIO_strings();
-  OpenSSL_add_all_algorithms();
+}
+
+void setupSSLContext(){
+  ctx = SSL_CTX_new(SSLv3_client_method()); // sslv3 method
+  // may switch to SSLv23? compatable with both
 }
 
 int main(int argc, char **argv)
