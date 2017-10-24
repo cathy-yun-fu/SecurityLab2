@@ -11,10 +11,13 @@
 #include "openssl/bio.h"
 #include "openssl/ssl.h"
 #include "openssl/err.h"
+#include "openssl/pem.h"
+#include "openssl/x509.h"
+#include "openssl/x509_vfy.h"
 
 // BOB
 
-#define PORT 8765
+#define PORT 8888
 
 /* use these strings to tell the marker what is happening */
 #define FMT_ACCEPT_ERR "ECE568-SERVER: SSL accept error\n"
@@ -22,7 +25,7 @@
 #define FMT_OUTPUT "ECE568-SERVER: %s %s\n"
 #define FMT_INCOMPLETE_CLOSE "ECE568-SERVER: Incomplete shutdown\n"
 
-SSL_CTX ctx = nullptr;
+SSL_CTX* ctx;
 
 void initOpenSSL(){
   SSL_library_init(); /* encryption & hash algorithms for SSL */

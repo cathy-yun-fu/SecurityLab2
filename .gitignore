@@ -1,6 +1,10 @@
 # Prerequisites
 *.d
 
+cmake-build*
+CMake*
+*/workspace.xml
+
 # Compiled Object files
 *.slo
 *.lo

@@ -11,11 +11,14 @@
 #include "openssl/bio.h"
 #include "openssl/ssl.h"
 #include "openssl/err.h"
+#include "openssl/pem.h"
+#include "openssl/x509.h"
+#include "openssl/x509_vfy.h"
 
 // ALICE
 
 #define HOST "localhost"
-#define PORT 8765
+#define PORT 8888
 
 /* use these strings to tell the marker what is happening */
 #define FMT_CONNECT_ERR "ECE568-CLIENT: SSL connect error\n"
@@ -26,7 +29,7 @@
 #define FMT_NO_VERIFY "ECE568-CLIENT: Certificate does not verify\n"
 #define FMT_INCORRECT_CLOSE "ECE568-CLIENT: Premature close\n"
 
-SSL_CTX ctx = nullptr;
+SSL_CTX* ctx;
 
 void initOpenSSL(){
   SSL_library_init(); /* encryption & hash algorithms for SSL */
@@ -72,6 +75,9 @@ int main(int argc, char **argv)
     exit(0);
   }
 
+  initOpenSSL();
+  setupSSLContext();
+
   memset(&addr,0,sizeof(addr));
   addr.sin_addr=*(struct in_addr *) host_entry->h_addr_list[0];
   addr.sin_family=AF_INET;
@@ -85,7 +91,11 @@ int main(int argc, char **argv)
     perror("socket");
   if(connect(sock,(struct sockaddr *)&addr, sizeof(addr))<0)
     perror("connect");
-  
+
+  /* connected */
+
+
+
   send(sock, secret, strlen(secret),0);
   len = recv(sock, &buf, 255, 0);
   buf[len]='\0';
