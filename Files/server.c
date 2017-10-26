@@ -25,15 +25,31 @@
 #define FMT_OUTPUT "ECE568-SERVER: %s %s\n"
 #define FMT_INCOMPLETE_CLOSE "ECE568-SERVER: Incomplete shutdown\n"
 
-SSL_CTX* ctx;
-
 void initOpenSSL(){
   SSL_library_init(); /* encryption & hash algorithms for SSL */
   SSL_load_error_strings(); /* error strings */
 }
 
-void setupSSLContext(){
-  ctx = SSL_CTX_new(SSLv3_server_method()); // sslv3 method
+SSL_CTX* setupSSLContext(){
+  SSL_CTX* ctx = SSL_CTX_new(SSLv23_server_method()); // sslv3 method
+  if (! (SSL_CTX_use_certificate_chain_file(ctx,"./bob.pem"))){
+    perror("Couldn't load certificate");
+  }
+  if (! (SSL_CTX_use_PrivateKey_file(ctx,"./bob.pem"))){
+    perror("Couldn't load Private Key");
+  }
+  if (! (SSL_CTX_load_verify_locations(ctx,"./568ca.pem", "\0"))){
+    perror("Couldn't load CA Certificate");
+  }
+
+  SSL_CTX_set_default_passwd_cb(ctx, "password");
+  
+  // limit to SSLv3 and TLS
+  SSL_CTX_set_options(ctx, SSL_OP_NO_DTLSv1);
+  SSL_CTX_set_options(ctx, SSL_OP_NO_DTLSv1_2);
+  SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2);
+
+  printf(FMT_OUTPUT, "Successfully set up SSL_CTX Object", "\0");
 }
 
 int main(int argc, char **argv)
@@ -66,6 +82,7 @@ int main(int argc, char **argv)
     exit(0);
   }
 
+  initOpenSSL();
 
   memset(&sin,0,sizeof(sin));
   sin.sin_addr.s_addr=INADDR_ANY;
@@ -94,6 +111,8 @@ int main(int argc, char **argv)
       close(s);
       exit (0);
     }
+
+    SSL_CTX *ctx = setupSSLContext();
     
     /*fork a child to handle the connection*/
     if((pid=fork())){

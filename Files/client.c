@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 
 #include "openssl/bio.h"
+#include <openssl/bioerr.h>
 #include "openssl/ssl.h"
 #include "openssl/err.h"
 #include "openssl/pem.h"
@@ -32,13 +33,35 @@
 SSL_CTX* ctx;
 
 void initOpenSSL(){
-  SSL_library_init(); /* encryption & hash algorithms for SSL */
-  SSL_load_error_strings(); /* error strings */
+//  if (!bio_err) {
+    SSL_library_init(); /* encryption & hash algorithms for SSL */
+    SSL_load_error_strings(); /* error strings *
+//    /* error write context ?*/
+//    bio_err=BIO_new_fp(stderr,BIO_NOCLOSE); // what is this used for?
+//  }
 }
 
 void setupSSLContext(){
-  ctx = SSL_CTX_new(SSLv3_client_method()); // sslv3 method
-  // may switch to SSLv23? compatable with both
+  ctx = SSL_CTX_new(SSLv23_client_method()); // sslv3 method
+  if (! (SSL_CTX_use_certificate_chain_file(ctx,"./alice.pem"))){
+    perror("Couldn't load certificate");
+  }
+  if (! (SSL_CTX_use_PrivateKey_file(ctx,"./alice.pem"))){
+    perror("Couldn't load Private Key");
+  }
+  if (! (SSL_CTX_load_verify_locations(ctx,"./568ca.pem", "\0"))){
+    perror("Couldn't load CA Certificate");
+  }
+
+  SSL_CTX_set_default_passwd_cb(ctx, "password");
+
+  // limit to SSLv3 and TLS
+  SSL_CTX_set_options(ctx, SSL_OP_NO_DTLSv1);
+  SSL_CTX_set_options(ctx, SSL_OP_NO_DTLSv1_2);
+  SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2);
+
+  printf(FMT_OUTPUT, "Successfully set up SSL_CTX Object", "\0");
+
 }
 
 int main(int argc, char **argv)
@@ -75,6 +98,7 @@ int main(int argc, char **argv)
     exit(0);
   }
 
+  // OpenSSL setup
   initOpenSSL();
   setupSSLContext();
 
@@ -102,7 +126,7 @@ int main(int argc, char **argv)
   
   /* this is how you output something for the marker to pick up */
   printf(FMT_OUTPUT, secret, buf);
-  
+
   close(sock);
   return 1;
 }
