@@ -35,7 +35,7 @@
 
 SSL_CTX* ctx;
 
-BIO* bio_err;
+BIO* bio_err = 0;
 BIO *sbio;
 SSL *ssl;
 
@@ -75,7 +75,7 @@ void initOpenSSL(){
     /* Global system initialization*/
     SSL_library_init();
     SSL_load_error_strings();
-    bio_err=BIO_new_fp(stdout,BIO_NOCLOSE); /* An error write context */
+    bio_err=BIO_new_fp(stderr,BIO_NOCLOSE); /* An error write context */
     printf("Initializing OpenSSL");
   }
 
@@ -84,7 +84,8 @@ void initOpenSSL(){
 }
 
 void setupSSLContext(){
-  ctx = SSL_CTX_new(SSLv23_client_method()); // sslv3 method
+  SSL_METHOD* meth = SSLv23_client_method();
+  ctx = SSL_CTX_new(meth); // sslv3 method
   if (! (SSL_CTX_use_certificate_chain_file(ctx,"./alice.pem"))){
     berr_exit("Couldn't load certificate");
   }
@@ -129,7 +130,11 @@ int main(int argc, char **argv)
       printf("Usage: %s server port\n", argv[0]);
       exit(0);
   }
-  
+
+  // OpenSSL setup
+  initOpenSSL();
+  setupSSLContext();
+
   /*get ip address of the host*/
   host_entry = gethostbyname(host);
   
@@ -137,10 +142,6 @@ int main(int argc, char **argv)
     fprintf(stderr,"Couldn't resolve host");
     exit(0);
   }
-
-  // OpenSSL setup
-  initOpenSSL();
-  setupSSLContext();
 
   memset(&addr,0,sizeof(addr));
   addr.sin_addr=*(struct in_addr *) host_entry->h_addr_list[0];
@@ -163,10 +164,35 @@ int main(int argc, char **argv)
   sbio=BIO_new_socket(sock,BIO_NOCLOSE);
   SSL_set_bio(ssl,sbio,sbio);
   /* connected */
-
-  if(SSL_connect(ssl)<=0) {
+  int r = 0;
+  if((r = SSL_connect(ssl))<=0) {
     printf(FMT_CONNECT_ERR);
-//    berr_exit("connect error");
+    printf("%i\n",r);
+    int j =0;
+    switch((j = SSL_get_error(ssl, r))) {
+      case SSL_ERROR_NONE:
+        printf("ssl_error_none\n");
+        break;
+      case SSL_ERROR_ZERO_RETURN:
+        printf("ssl_error_zero_return\n");
+        break;
+      case SSL_ERROR_SYSCALL:
+        printf("ssl_error_syscall\n");
+        printf("Err_get_error: %d\n", ERR_get_error());
+        break;
+      case SSL_ERROR_SSL:
+        printf("ssl_error_ssl\n");
+        break;
+      case SSL_ERROR_WANT_READ:
+        printf("ssl_error_want_read\n");
+        break;
+      default:
+        printf("unknown error!\n");
+        break;
+    }
+    printf("%d\n",j);
+    ERR_print_errors_fp(stdout);
+
   }
 
   //check_cert(ssl,host);

@@ -160,8 +160,29 @@ int main(int argc, char **argv)
       BIO* sbio = BIO_new_socket(sock,BIO_NOCLOSE);
       SSL_set_bio(ssl,sbio,sbio);
 
-      if(SSL_accept(ssl)<=0) {
+      int r =0;
+      if((r = SSL_accept(ssl))<=0) {
         printf(FMT_ACCEPT_ERR);
+        switch(SSL_get_error(ssl, r)) {
+          case SSL_ERROR_NONE:
+            printf("ssl_error_none\n");
+            break;
+          case SSL_ERROR_ZERO_RETURN:
+            printf("ssl_error_zero_return\n");
+            break;
+          case SSL_ERROR_SYSCALL:
+            printf("ssl_error_syscall\n");
+            break;
+          case SSL_ERROR_SSL:
+            printf("ssl_error_ssl\n");
+            break;
+          case SSL_ERROR_WANT_READ:
+            printf("ssl_error_want_read\n");
+            break;
+          default:
+            printf("unknown error!\n");
+            break;
+        }
 //        ERR_print_errors(sbio);
 //        berr_exit("accept error");
       }
