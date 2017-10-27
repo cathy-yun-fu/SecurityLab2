@@ -8,8 +8,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include "openssl/bio.h"
 #include "openssl/ssl.h"
+#include "openssl/bio.h"
 #include "openssl/err.h"
 #include "openssl/pem.h"
 #include "openssl/x509.h"
@@ -29,11 +29,22 @@
 #define FMT_NO_VERIFY "ECE568-CLIENT: Certificate does not verify\n"
 #define FMT_INCORRECT_CLOSE "ECE568-CLIENT: Premature close\n"
 
+// openssl version 1.0.1e-fips
+
+#define PASSWORD "password"
+
 SSL_CTX* ctx;
 
 BIO* bio_err;
 BIO *sbio;
 SSL *ssl;
+
+static int cb(char *buf,int num, int rwflag,void *userdata)
+{
+   if (num < strlen(PASSWORD)+1) return(0);
+   strcpy(buf,PASSWORD);
+   return(strlen(PASSWORD));
+}
 
 int berr_exit(char *string) {
   BIO_printf(bio_err,"%s\n",string);
@@ -66,6 +77,9 @@ void initOpenSSL(){
     SSL_load_error_strings();
     bio_err=BIO_new_fp(stderr,BIO_NOCLOSE); /* An error write context */
   }
+
+  /* Set up a SIGPIPE handler */ // ??? what is a sigpipe handler
+//  signal(SIGPIPE,sigpipe_handle);
 }
 
 void setupSSLContext(){
@@ -73,18 +87,16 @@ void setupSSLContext(){
   if (! (SSL_CTX_use_certificate_chain_file(ctx,"./alice.pem"))){
     berr_exit("Couldn't load certificate");
   }
-  if (! (SSL_CTX_use_PrivateKey_file(ctx,"./alice.pem", "\0"))){
+  if (! (SSL_CTX_use_PrivateKey_file(ctx,"./alice.pem", SSL_FILETYPE_PEM)) ){
     berr_exit("Couldn't load Private Key");
   }
-  if (! (SSL_CTX_load_verify_locations(ctx,"./568ca.pem", "\0"))){
+  if (! (SSL_CTX_load_verify_locations(ctx,"./568ca.pem", 0))){
     berr_exit("Couldn't load CA Certificate");
   }
 
-  SSL_CTX_set_default_passwd_cb(ctx, "password");
+  SSL_CTX_set_default_passwd_cb(ctx, cb);
 
   // limit to SSLv3 and TLS
-  SSL_CTX_set_options(ctx, SSL_OP_NO_DTLSv1);
-  SSL_CTX_set_options(ctx, SSL_OP_NO_DTLSv1_2);
   SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2);
 
   printf(FMT_OUTPUT, "Successfully set up SSL_CTX Object", "\0");
@@ -164,5 +176,6 @@ int main(int argc, char **argv)
   printf(FMT_OUTPUT, secret, buf);
 
   close(sock);
+  SSL_CTX_free(ctx);
   return 1;
 }

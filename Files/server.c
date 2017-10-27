@@ -25,8 +25,18 @@
 #define FMT_OUTPUT "ECE568-SERVER: %s %s\n"
 #define FMT_INCOMPLETE_CLOSE "ECE568-SERVER: Incomplete shutdown\n"
 
+#define PASSWORD "password"
+
 SSL_CTX* ctx;
 BIO *bio_err;
+
+static int cb(char *buf,int num, int rwflag,void *userdata)
+{
+  if (num < strlen(PASSWORD)+1) return(0);
+  strcpy(buf,PASSWORD);
+  return(strlen(PASSWORD));
+}
+
 
 int berr_exit(char *string) {
   BIO_printf(bio_err,"%s\n",string);
@@ -41,6 +51,9 @@ void initOpenSSL(){
     SSL_load_error_strings();  /* error strings */
     bio_err=BIO_new_fp(stderr,BIO_NOCLOSE); /* An error write context */
   }
+
+   /* Set up a SIGPIPE handler */ // ??? what is a sigpipe handler
+//   signal(SIGPIPE,sigpipe_handle);
 }
 
 void setupSSLContext(){
@@ -48,18 +61,16 @@ void setupSSLContext(){
   if (! (SSL_CTX_use_certificate_chain_file(ctx,"./bob.pem"))){
     berr_exit("Couldn't load certificate");
   }
-  if (! (SSL_CTX_use_PrivateKey_file(ctx,"./bob.pem"))){
+  if (! (SSL_CTX_use_PrivateKey_file(ctx,"./bob.pem", SSL_FILETYPE_PEM))){
     berr_exit("Couldn't load Private Key");
   }
-  if (! (SSL_CTX_load_verify_locations(ctx,"./568ca.pem", "\0"))){
+  if (! (SSL_CTX_load_verify_locations(ctx,"./568ca.pem", 0))){
     berr_exit("Couldn't load CA Certificate");
   }
 
-  SSL_CTX_set_default_passwd_cb(ctx, "password");
+  SSL_CTX_set_default_passwd_cb(ctx, cb);
 
   // limit to SSLv3 and TLS
-  SSL_CTX_set_options(ctx, SSL_OP_NO_DTLSv1);
-  SSL_CTX_set_options(ctx, SSL_OP_NO_DTLSv1_2);
   SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2);
 
 #if (OPENSSL_VERSION_NUMBER < 0x0090600fL)
@@ -120,7 +131,7 @@ int main(int argc, char **argv)
     exit (0);
   }
 
-  SSL_CTX *ctx = setupSSLContext();
+  setupSSLContext();
 
   while(1){
     
@@ -151,7 +162,7 @@ int main(int argc, char **argv)
       return 0;
     }
   }
-  
+  // when free CTX?
   close(sock);
   return 1;
 }
