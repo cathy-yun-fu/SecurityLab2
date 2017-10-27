@@ -52,6 +52,13 @@ int berr_exit(char *string) {
   exit(0);
 }
 
+int berr_exit_cleanup(char *string, int sock) {
+  BIO_printf(bio_err,"%s\n",string);
+  ERR_print_errors(bio_err);
+  close(sock);
+  exit(0);
+}
+
 void check_cert(SSL* ssl, char* host)
 { // ?
   X509 *peer;
@@ -76,23 +83,26 @@ void initOpenSSL(){
     SSL_library_init();
     SSL_load_error_strings();
     bio_err=BIO_new_fp(stderr,BIO_NOCLOSE); /* An error write context */
-    printf("Initializing OpenSSL");
+    printf(FMT_OUTPUT, "Initializing OpenSSL","\0");
   }
 
   /* Set up a SIGPIPE handler */ // ??? what is a sigpipe handler
-//  signal(SIGPIPE,sigpipe_handle);
+  //  signal(SIGPIPE,sigpipe_handle);
 }
 
 void setupSSLContext(){
   SSL_METHOD* meth = SSLv23_client_method();
   ctx = SSL_CTX_new(meth); // sslv3 method
   if (! (SSL_CTX_use_certificate_chain_file(ctx,"./alice.pem"))){
+    printf(FMT_OUTPUT, "Couldn't load certificate","\0");
     berr_exit("Couldn't load certificate");
   }
   if (! (SSL_CTX_use_PrivateKey_file(ctx,"./alice.pem", SSL_FILETYPE_PEM)) ){
+    printf(FMT_OUTPUT, "Couldn't load Private Key","\0");
     berr_exit("Couldn't load Private Key");
   }
   if (! (SSL_CTX_load_verify_locations(ctx,"./568ca.pem", 0))){
+    printf(FMT_OUTPUT, "Couldn't load CA Certificate","\0");
     berr_exit("Couldn't load CA Certificate");
   }
 
@@ -135,6 +145,7 @@ int main(int argc, char **argv)
   initOpenSSL();
   setupSSLContext();
 
+  /* TCP Starts */
   /*get ip address of the host*/
   host_entry = gethostbyname(host);
   
@@ -150,12 +161,20 @@ int main(int argc, char **argv)
   
   printf("Connecting to %s(%s):%d\n", host, inet_ntoa(addr.sin_addr),port);
   
-  /*open socket*/
+  /* open socket */
   
-  if((sock=socket(AF_INET, SOCK_STREAM, IPPROTO_TCP))<0)
+  if((sock=socket(AF_INET, SOCK_STREAM, IPPROTO_TCP))<0) {
     perror("socket");
-  if(connect(sock,(struct sockaddr *)&addr, sizeof(addr))<0)
+    printf(FMT_OUTPUT, "Socket Error","\0");
+    berr_exit_cleanup("socket error", sock);
+  }
+  if(connect(sock,(struct sockaddr *)&addr, sizeof(addr))<0) {
     perror("connect");
+    printf(FMT_OUTPUT, "Connect Error","\0");
+    berr_exit_cleanup("connect error", sock);
+  }
+
+  /* TCP Connected */
 
   // Attach SSL to socket
   ssl=SSL_new(ctx);
@@ -163,18 +182,19 @@ int main(int argc, char **argv)
 
   sbio=BIO_new_socket(sock,BIO_NOCLOSE);
   SSL_set_bio(ssl,sbio,sbio);
-  /* connected */
+
   int r = 0;
-  if((r = SSL_connect(ssl))<=0) {
-    printf(FMT_CONNECT_ERR);
+  if((r = SSL_connect(ssl))<=0) { // error
     printf("%i\n",r);
     int j =0;
     switch((j = SSL_get_error(ssl, r))) {
       case SSL_ERROR_NONE:
         printf("ssl_error_none\n");
+        printf("Err_get_error: %d\n", ERR_get_error());
         break;
       case SSL_ERROR_ZERO_RETURN:
         printf("ssl_error_zero_return\n");
+        printf("Err_get_error: %d\n", ERR_get_error());
         break;
       case SSL_ERROR_SYSCALL:
         printf("ssl_error_syscall\n");
@@ -182,23 +202,24 @@ int main(int argc, char **argv)
         break;
       case SSL_ERROR_SSL:
         printf("ssl_error_ssl\n");
+        printf("Err_get_error: %d\n", ERR_get_error());
         break;
       case SSL_ERROR_WANT_READ:
         printf("ssl_error_want_read\n");
+        printf("Err_get_error: %d\n", ERR_get_error());
         break;
       default:
         printf("unknown error!\n");
+        printf("Err_get_error: %d\n", ERR_get_error());
         break;
     }
     printf("%d\n",j);
-    ERR_print_errors_fp(stdout);
-
+    printf(FMT_CONNECT_ERR);
+    berr_exit_cleanup("accept error", sock);
   }
 
   //check_cert(ssl,host);
-//  check_cert(ssl, &addr);
-
-
+  //check_cert(ssl, &addr);
 
   send(sock, secret, strlen(secret),0);
   len = recv(sock, &buf, 255, 0);

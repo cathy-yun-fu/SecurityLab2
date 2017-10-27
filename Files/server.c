@@ -46,28 +46,40 @@ int berr_exit(char *string) {
   exit(0);
 }
 
+int berr_exit_cleanup(char *string, int sock, int s){
+  BIO_printf(bio_err,"%s\n",string);
+  ERR_print_errors(bio_err);
+  close(sock);
+  close(s);
+  exit(0);
+}
+
+
 void initOpenSSL(){
   if(!bio_err){
     /* Global system initialization*/
     SSL_library_init(); /* encryption & hash algorithms for SSL */
     SSL_load_error_strings();  /* error strings */
     bio_err=BIO_new_fp(stdout,BIO_NOCLOSE); /* An error write context */
-    printf("Initializing OpenSSL\n");
+    printf(FMT_OUTPUT, "Initializing OpenSSL","\0");
   }
 
    /* Set up a SIGPIPE handler */ // ??? what is a sigpipe handler
-//   signal(SIGPIPE,sigpipe_handle);
+  //   signal(SIGPIPE,sigpipe_handle);
 }
 
 void setupSSLContext(){
   ctx = SSL_CTX_new(SSLv23_server_method()); // sslv3 method
   if (! (SSL_CTX_use_certificate_chain_file(ctx,"./bob.pem"))){
+    printf(FMT_OUTPUT, "Couldn't load certificate","\0");
     berr_exit("Couldn't load certificate");
   }
   if (! (SSL_CTX_use_PrivateKey_file(ctx,"./bob.pem", SSL_FILETYPE_PEM))){
+    printf(FMT_OUTPUT, "Couldn't load Private Key","\0");
     berr_exit("Couldn't load Private Key");
   }
   if (! (SSL_CTX_load_verify_locations(ctx,"./568ca.pem", 0))){
+    printf(FMT_OUTPUT, "Couldn't load CA certificate","\0");
     berr_exit("Couldn't load CA Certificate");
   }
 
@@ -162,15 +174,19 @@ int main(int argc, char **argv)
         switch(SSL_get_error(ssl, r)) {
           case SSL_ERROR_NONE:
             printf("ssl_error_none\n");
+            printf("Err_get_error: %d\n", ERR_get_error());
             break;
           case SSL_ERROR_ZERO_RETURN:
             printf("ssl_error_zero_return\n");
+            printf("Err_get_error: %d\n", ERR_get_error());
             break;
           case SSL_ERROR_SYSCALL:
             printf("ssl_error_syscall\n");
+            printf("Err_get_error: %d\n", ERR_get_error());
             break;
           case SSL_ERROR_SSL:
             printf("ssl_error_ssl\n");
+            printf("Err_get_error: %d\n", ERR_get_error());
             break;
           case SSL_ERROR_WANT_READ:
             printf("ssl_error_want_read\n");
@@ -178,9 +194,10 @@ int main(int argc, char **argv)
             break;
           default:
             printf("unknown error!\n");
+            printf("Err_get_error: %d\n", ERR_get_error());
             break;
         }
-        berr_exit("accept error");
+        berr_exit_cleanup("accept error", sock, s);
       }
 
       len = recv(s, &buf, 255, 0);
