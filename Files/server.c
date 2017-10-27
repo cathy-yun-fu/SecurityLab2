@@ -30,6 +30,8 @@
 SSL_CTX* ctx;
 BIO *bio_err;
 
+SSL* ssl;
+
 static int cb(char *buf,int num, int rwflag,void *userdata)
 {
   if (num < strlen(PASSWORD)+1) return(0);
@@ -49,7 +51,8 @@ void initOpenSSL(){
     /* Global system initialization*/
     SSL_library_init(); /* encryption & hash algorithms for SSL */
     SSL_load_error_strings();  /* error strings */
-    bio_err=BIO_new_fp(stderr,BIO_NOCLOSE); /* An error write context */
+    bio_err=BIO_new_fp(stdout,BIO_NOCLOSE); /* An error write context */
+    printf("Initializing OpenSSL\n");
   }
 
    /* Set up a SIGPIPE handler */ // ??? what is a sigpipe handler
@@ -103,9 +106,8 @@ int main(int argc, char **argv)
       exit(0);
   }
 
-
   if((sock=socket(AF_INET,SOCK_STREAM,0))<0){
-    berr_exit("socket");
+    perror("socket");
     close(sock);
     exit(0);
   }
@@ -120,13 +122,13 @@ int main(int argc, char **argv)
   setsockopt(sock,SOL_SOCKET,SO_REUSEADDR, &val,sizeof(val));
     
   if(bind(sock,(struct sockaddr *)&sin, sizeof(sin))<0){
-    berr_exit("bind");
+    perror("bind");
     close(sock);
     exit (0);
   }
   
   if(listen(sock,5)<0){
-    berr_exit("listen");
+    perror("listen");
     close(sock);
     exit (0);
   }
@@ -136,12 +138,11 @@ int main(int argc, char **argv)
   while(1){
     
     if((s=accept(sock, NULL, 0))<0){
-      berr_exit("accept");
+      perror("accept");
       close(sock);
       close(s);
       exit (0);
     }
-
 
     /*fork a child to handle the connection*/
     if((pid=fork())){
@@ -152,6 +153,18 @@ int main(int argc, char **argv)
       int len;
       char buf[256];
       char *answer = "42";
+
+      SSL* ssl = SSL_new(ctx);
+      SSL_set_fd(ssl,s);
+
+      BIO* sbio = BIO_new_socket(sock,BIO_NOCLOSE);
+      SSL_set_bio(ssl,sbio,sbio);
+
+      if(SSL_accept(ssl)<=0) {
+        printf(FMT_ACCEPT_ERR);
+//        ERR_print_errors(sbio);
+//        berr_exit("accept error");
+      }
 
       len = recv(s, &buf, 255, 0);
       buf[len]= '\0';

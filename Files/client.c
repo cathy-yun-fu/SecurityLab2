@@ -75,7 +75,8 @@ void initOpenSSL(){
     /* Global system initialization*/
     SSL_library_init();
     SSL_load_error_strings();
-    bio_err=BIO_new_fp(stderr,BIO_NOCLOSE); /* An error write context */
+    bio_err=BIO_new_fp(stdout,BIO_NOCLOSE); /* An error write context */
+    printf("Initializing OpenSSL");
   }
 
   /* Set up a SIGPIPE handler */ // ??? what is a sigpipe handler
@@ -151,22 +152,27 @@ int main(int argc, char **argv)
   /*open socket*/
   
   if((sock=socket(AF_INET, SOCK_STREAM, IPPROTO_TCP))<0)
-    berr_exit("socket");
+    perror("socket");
   if(connect(sock,(struct sockaddr *)&addr, sizeof(addr))<0)
-    berr_exit("connect");
+    perror("connect");
 
   // Attach SSL to socket
   ssl=SSL_new(ctx);
+  SSL_set_fd(ssl,sock);
+
   sbio=BIO_new_socket(sock,BIO_NOCLOSE);
   SSL_set_bio(ssl,sbio,sbio);
+  /* connected */
+
   if(SSL_connect(ssl)<=0) {
-    berr_exit("ECE568-CLIENT: SSL connect error");
+    printf(FMT_CONNECT_ERR);
+//    berr_exit("connect error");
   }
 
   //check_cert(ssl,host);
-  check_cert(ssl, &addr);
+//  check_cert(ssl, &addr);
 
-  /* connected */
+
 
   send(sock, secret, strlen(secret),0);
   len = recv(sock, &buf, 255, 0);
