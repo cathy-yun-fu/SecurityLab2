@@ -113,6 +113,7 @@ int main(int argc, char **argv)
   }
 
   initOpenSSL();
+  setupSSLContext();
 
   memset(&sin,0,sizeof(sin));
   sin.sin_addr.s_addr=INADDR_ANY;
@@ -132,8 +133,6 @@ int main(int argc, char **argv)
     close(sock);
     exit (0);
   }
-
-  setupSSLContext();
 
   while(1){
     
@@ -157,9 +156,6 @@ int main(int argc, char **argv)
       SSL* ssl = SSL_new(ctx);
       SSL_set_fd(ssl,s);
 
-      BIO* sbio = BIO_new_socket(sock,BIO_NOCLOSE);
-      SSL_set_bio(ssl,sbio,sbio);
-
       int r =0;
       if((r = SSL_accept(ssl))<=0) {
         printf(FMT_ACCEPT_ERR);
@@ -178,13 +174,13 @@ int main(int argc, char **argv)
             break;
           case SSL_ERROR_WANT_READ:
             printf("ssl_error_want_read\n");
+            printf("Err_get_error: %d\n", ERR_get_error());
             break;
           default:
             printf("unknown error!\n");
             break;
         }
-//        ERR_print_errors(sbio);
-//        berr_exit("accept error");
+        berr_exit("accept error");
       }
 
       len = recv(s, &buf, 255, 0);
