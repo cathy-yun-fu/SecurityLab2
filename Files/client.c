@@ -9,7 +9,6 @@
 #include <arpa/inet.h>
 
 #include "openssl/bio.h"
-#include <openssl/bioerr.h>
 #include "openssl/ssl.h"
 #include "openssl/err.h"
 #include "openssl/pem.h"
@@ -32,25 +31,53 @@
 
 SSL_CTX* ctx;
 
+BIO* bio_err;
+BIO *sbio;
+SSL *ssl;
+
+int berr_exit(char *string) {
+  BIO_printf(bio_err,"%s\n",string);
+  ERR_print_errors(bio_err);
+  exit(0);
+}
+
+void check_cert(SSL* ssl, char* host)
+{ // ?
+  X509 *peer;
+  char peer_CN[256];
+  if(SSL_get_verify_result(ssl)!=X509_V_OK) {
+    berr_exit("ECE568-CLIENT: Certificate does not verify");
+  }
+  /*Check the cert chain. The chain length
+    is automatically checked by OpenSSL when
+    we set the verify depth in the ctx */
+  /*Check the common name*/
+  peer=SSL_get_peer_certificate(ssl);
+  X509_NAME_get_text_by_NID(X509_get_subject_name(peer),NID_commonName, peer_CN, 256);
+  if(strcasecmp(peer_CN,host)) {
+    berr_exit("Common name doesn't match host name");
+  }
+}
+
 void initOpenSSL(){
-//  if (!bio_err) {
-    SSL_library_init(); /* encryption & hash algorithms for SSL */
-    SSL_load_error_strings(); /* error strings *
-//    /* error write context ?*/
-//    bio_err=BIO_new_fp(stderr,BIO_NOCLOSE); // what is this used for?
-//  }
+  if(!bio_err){
+    /* Global system initialization*/
+    SSL_library_init();
+    SSL_load_error_strings();
+    bio_err=BIO_new_fp(stderr,BIO_NOCLOSE); /* An error write context */
+  }
 }
 
 void setupSSLContext(){
   ctx = SSL_CTX_new(SSLv23_client_method()); // sslv3 method
   if (! (SSL_CTX_use_certificate_chain_file(ctx,"./alice.pem"))){
-    perror("Couldn't load certificate");
+    berr_exit("Couldn't load certificate");
   }
-  if (! (SSL_CTX_use_PrivateKey_file(ctx,"./alice.pem"))){
-    perror("Couldn't load Private Key");
+  if (! (SSL_CTX_use_PrivateKey_file(ctx,"./alice.pem", "\0"))){
+    berr_exit("Couldn't load Private Key");
   }
   if (! (SSL_CTX_load_verify_locations(ctx,"./568ca.pem", "\0"))){
-    perror("Couldn't load CA Certificate");
+    berr_exit("Couldn't load CA Certificate");
   }
 
   SSL_CTX_set_default_passwd_cb(ctx, "password");
@@ -112,13 +139,22 @@ int main(int argc, char **argv)
   /*open socket*/
   
   if((sock=socket(AF_INET, SOCK_STREAM, IPPROTO_TCP))<0)
-    perror("socket");
+    berr_exit("socket");
   if(connect(sock,(struct sockaddr *)&addr, sizeof(addr))<0)
-    perror("connect");
+    berr_exit("connect");
+
+  // Attach SSL to socket
+  ssl=SSL_new(ctx);
+  sbio=BIO_new_socket(sock,BIO_NOCLOSE);
+  SSL_set_bio(ssl,sbio,sbio);
+  if(SSL_connect(ssl)<=0) {
+    berr_exit("ECE568-CLIENT: SSL connect error");
+  }
+
+  //check_cert(ssl,host);
+  check_cert(ssl, &addr);
 
   /* connected */
-
-
 
   send(sock, secret, strlen(secret),0);
   len = recv(sock, &buf, 255, 0);

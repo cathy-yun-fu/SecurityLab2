@@ -25,29 +25,46 @@
 #define FMT_OUTPUT "ECE568-SERVER: %s %s\n"
 #define FMT_INCOMPLETE_CLOSE "ECE568-SERVER: Incomplete shutdown\n"
 
-void initOpenSSL(){
-  SSL_library_init(); /* encryption & hash algorithms for SSL */
-  SSL_load_error_strings(); /* error strings */
+SSL_CTX* ctx;
+BIO *bio_err;
+
+int berr_exit(char *string) {
+  BIO_printf(bio_err,"%s\n",string);
+  ERR_print_errors(bio_err);
+  exit(0);
 }
 
-SSL_CTX* setupSSLContext(){
-  SSL_CTX* ctx = SSL_CTX_new(SSLv23_server_method()); // sslv3 method
+void initOpenSSL(){
+  if(!bio_err){
+    /* Global system initialization*/
+    SSL_library_init(); /* encryption & hash algorithms for SSL */
+    SSL_load_error_strings();  /* error strings */
+    bio_err=BIO_new_fp(stderr,BIO_NOCLOSE); /* An error write context */
+  }
+}
+
+void setupSSLContext(){
+  ctx = SSL_CTX_new(SSLv23_server_method()); // sslv3 method
   if (! (SSL_CTX_use_certificate_chain_file(ctx,"./bob.pem"))){
-    perror("Couldn't load certificate");
+    berr_exit("Couldn't load certificate");
   }
   if (! (SSL_CTX_use_PrivateKey_file(ctx,"./bob.pem"))){
-    perror("Couldn't load Private Key");
+    berr_exit("Couldn't load Private Key");
   }
   if (! (SSL_CTX_load_verify_locations(ctx,"./568ca.pem", "\0"))){
-    perror("Couldn't load CA Certificate");
+    berr_exit("Couldn't load CA Certificate");
   }
 
   SSL_CTX_set_default_passwd_cb(ctx, "password");
-  
+
   // limit to SSLv3 and TLS
   SSL_CTX_set_options(ctx, SSL_OP_NO_DTLSv1);
   SSL_CTX_set_options(ctx, SSL_OP_NO_DTLSv1_2);
   SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2);
+
+#if (OPENSSL_VERSION_NUMBER < 0x0090600fL)
+  SSL_CTX_set_verify_depth(ctx,1);
+#endif
 
   printf(FMT_OUTPUT, "Successfully set up SSL_CTX Object", "\0");
 }
@@ -77,7 +94,7 @@ int main(int argc, char **argv)
 
 
   if((sock=socket(AF_INET,SOCK_STREAM,0))<0){
-    perror("socket");
+    berr_exit("socket");
     close(sock);
     exit(0);
   }
@@ -92,28 +109,29 @@ int main(int argc, char **argv)
   setsockopt(sock,SOL_SOCKET,SO_REUSEADDR, &val,sizeof(val));
     
   if(bind(sock,(struct sockaddr *)&sin, sizeof(sin))<0){
-    perror("bind");
+    berr_exit("bind");
     close(sock);
     exit (0);
   }
   
   if(listen(sock,5)<0){
-    perror("listen");
+    berr_exit("listen");
     close(sock);
     exit (0);
-  } 
-  
+  }
+
+  SSL_CTX *ctx = setupSSLContext();
+
   while(1){
     
     if((s=accept(sock, NULL, 0))<0){
-      perror("accept");
+      berr_exit("accept");
       close(sock);
       close(s);
       exit (0);
     }
 
-    SSL_CTX *ctx = setupSSLContext();
-    
+
     /*fork a child to handle the connection*/
     if((pid=fork())){
       close(s);
