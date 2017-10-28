@@ -59,7 +59,7 @@ int berr_exit_cleanup(char *string, int sock) {
   exit(0);
 }
 
-void check_cert(SSL* ssl, char* host)
+void check_cert(SSL* ssl, struct sockaddr_in* addr)
 { // ?
   X509 *peer;
   char peer_CN[256];
@@ -111,12 +111,21 @@ void setupSSLContext(){
   // limit to SSLv3 and TLS
   SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2);
 
+  #if (OPENSSL_VERSION_NUMBER < 0x0090600fL)
+    SSL_CTX_set_verify_depth(ctx,1);
+  #endif
+
   printf(FMT_OUTPUT, "Successfully set up SSL_CTX Object", "\0");
+
+}
+
+int verify_callback(int a, X509_STORE_CTX* ctx) {
 
 }
 
 int main(int argc, char **argv)
 {
+  // Reference: http://h41379.www4.hpe.com/doc/83final/ba554_90007/ch04s03.html
   int len, sock, port=PORT;
   char *host=HOST;
   struct sockaddr_in addr;
@@ -218,8 +227,15 @@ int main(int argc, char **argv)
     berr_exit_cleanup("accept error", sock);
   }
 
-  //check_cert(ssl,host);
-  //check_cert(ssl, &addr);
+  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback); // in progress
+  // https://wiki.openssl.org/index.php/Manual:SSL_CTX_set_verify(3)
+
+  if (SSL_get_peer_certicate(ssl) != NULL) {
+    check_cert(ssl, &addr);
+  } else {
+    printf(FMT_OUTPUT, "Could not get Peer Certificate","\0");
+    berr_exit_cleanup("Could not get Peer Certificate",sock);
+  }
 
   send(sock, secret, strlen(secret),0);
   len = recv(sock, &buf, 255, 0);
@@ -228,7 +244,11 @@ int main(int argc, char **argv)
   /* this is how you output something for the marker to pick up */
   printf(FMT_OUTPUT, secret, buf);
 
+  // clean-up
   close(sock);
+  SSL_free(ssl);
+  BIO_free_all(sbio);
+  BIO_free_all(bio_err);
   SSL_CTX_free(ctx);
   return 1;
 }

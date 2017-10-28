@@ -54,6 +54,23 @@ int berr_exit_cleanup(char *string, int sock, int s){
   exit(0);
 }
 
+void check_cert(SSL* ssl, struct sockaddr_in* addr)
+{ // ?
+  X509 *peer;
+  char peer_CN[256];
+  if(SSL_get_verify_result(ssl)!=X509_V_OK) {
+    berr_exit("ECE568-CLIENT: Certificate does not verify");
+  }
+  /*Check the cert chain. The chain length
+    is automatically checked by OpenSSL when
+    we set the verify depth in the ctx */
+  /*Check the common name*/
+  peer=SSL_get_peer_certificate(ssl);
+  X509_NAME_get_text_by_NID(X509_get_subject_name(peer),NID_commonName, peer_CN, 256);
+  if(strcasecmp(peer_CN,host)) {
+    berr_exit("Common name doesn't match host name");
+  }
+}
 
 void initOpenSSL(){
   if(!bio_err){
@@ -126,6 +143,7 @@ int main(int argc, char **argv)
 
   initOpenSSL();
   setupSSLContext();
+  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_cert);
 
   memset(&sin,0,sizeof(sin));
   sin.sin_addr.s_addr=INADDR_ANY;
@@ -133,7 +151,7 @@ int main(int argc, char **argv)
   sin.sin_port=htons(port);
   
   setsockopt(sock,SOL_SOCKET,SO_REUSEADDR, &val,sizeof(val));
-    
+
   if(bind(sock,(struct sockaddr *)&sin, sizeof(sin))<0){
     perror("bind");
     close(sock);
@@ -204,12 +222,15 @@ int main(int argc, char **argv)
       buf[len]= '\0';
       printf(FMT_OUTPUT, buf, answer);
       send(s, answer, strlen(answer), 0);
-      close(sock);
+
+      // Cleanup
+      SSL_free(ssl);
       close(s);
       return 0;
     }
   }
-  // when free CTX?
+
   close(sock);
+  SSL_CTX_free(ctx);
   return 1;
 }
