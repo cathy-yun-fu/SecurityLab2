@@ -54,17 +54,12 @@ int berr_exit_cleanup(char *string, int sock, int s){
   exit(0);
 }
 
-void check_cert(SSL* ssl)
+void check_cert(SSL* ssl, X509 *peer)
 {
-  X509 *peer;
   char peer_CN[256];
   char peer_email[256];
-  /*Check the cert chain. The chain length
-    is automatically checked by OpenSSL when
-    we set the verify depth in the ctx */
   /*Check the common name*/
-  peer=SSL_get_peer_certificate(ssl);
-  // I cannot get any info from these functions... not sure whats going on...
+
   X509_NAME_get_text_by_NID(X509_get_subject_name(peer),NID_commonName, peer_CN, 256);
   X509_NAME_get_text_by_NID(X509_get_subject_name(peer),NID_pkcs9_emailAddress, peer_email, 256);
 
@@ -77,38 +72,51 @@ void initOpenSSL(){
     SSL_library_init(); /* encryption & hash algorithms for SSL */
     SSL_load_error_strings();  /* error strings */
     bio_err=BIO_new_fp(stdout,BIO_NOCLOSE); /* An error write context */
-    printf(FMT_OUTPUT, "Initializing OpenSSL","\0");
   }
-
-   /* Set up a SIGPIPE handler */ // ??? what is a sigpipe handler
-  //   signal(SIGPIPE,sigpipe_handle);
 }
 
 void setupSSLContext(){
   ctx = SSL_CTX_new(SSLv23_server_method()); // sslv3 method
   if (! (SSL_CTX_use_certificate_chain_file(ctx,"./bob.pem"))){
-    printf(FMT_OUTPUT, "Couldn't load certificate","\0");
     berr_exit("Couldn't load certificate");
   }
   if (! (SSL_CTX_use_PrivateKey_file(ctx,"./bob.pem", SSL_FILETYPE_PEM))){
-    printf(FMT_OUTPUT, "Couldn't load Private Key","\0");
     berr_exit("Couldn't load Private Key");
   }
   if (! (SSL_CTX_load_verify_locations(ctx,"./568ca.pem", 0))){
-    printf(FMT_OUTPUT, "Couldn't load CA certificate","\0");
     berr_exit("Couldn't load CA Certificate");
   }
 
   SSL_CTX_set_default_passwd_cb(ctx, cb);
-
-  // limit to SSLv3 and TLS
-  SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2);
+//  SSL_CTX_set_cipher_list()
+//  SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2);
 
 #if (OPENSSL_VERSION_NUMBER < 0x0090600fL)
   SSL_CTX_set_verify_depth(ctx,1);
 #endif
+}
 
-  printf(FMT_OUTPUT, "Successfully set up SSL_CTX Object", "\0");
+void ssl_shutdown(SSL* ssl, int s) {
+  int r = SSL_shutdown(ssl);
+  while (!r) {
+    /* If we called SSL_shutdown() first then
+       we always get return value of '0'. In
+       this case, try again, but first send a
+       TCP FIN to trigger the other side's
+       close_notify*/
+    shutdown(s, 1);
+    r = SSL_shutdown(ssl);
+  }
+  switch (r) {
+    case 1:
+      printf("shutdown succeed\n");
+      break; /* Success */
+    case -1:
+      printf(FMT_INCOMPLETE_CLOSE);
+      break;
+    default:
+      berr_exit(FMT_INCOMPLETE_CLOSE);
+  }
 }
 
 int main(int argc, char **argv)
@@ -117,7 +125,7 @@ int main(int argc, char **argv)
   struct sockaddr_in sin;
   int val=1;
   pid_t pid;
-  
+
   /*Parse command line arguments*/
   switch(argc){
     case 1:
@@ -125,8 +133,8 @@ int main(int argc, char **argv)
     case 2:
       port=atoi(argv[1]);
       if (port<1||port>65535){
-    fprintf(stderr,"invalid port number");
-    exit(0);
+        fprintf(stderr,"invalid port number");
+        exit(0);
       }
       break;
     default:
@@ -148,7 +156,7 @@ int main(int argc, char **argv)
   sin.sin_addr.s_addr=INADDR_ANY;
   sin.sin_family=AF_INET;
   sin.sin_port=htons(port);
-  
+
   setsockopt(sock,SOL_SOCKET,SO_REUSEADDR, &val,sizeof(val));
 
   if(bind(sock,(struct sockaddr *)&sin, sizeof(sin))<0){
@@ -156,7 +164,7 @@ int main(int argc, char **argv)
     close(sock);
     exit (0);
   }
-  
+
   if(listen(sock,5)<0){
     perror("listen");
     close(sock);
@@ -164,7 +172,7 @@ int main(int argc, char **argv)
   }
 
   while(1){
-    
+
     if((s=accept(sock, NULL, 0))<0){
       perror("accept");
       close(sock);
@@ -215,25 +223,25 @@ int main(int argc, char **argv)
             break;
         }
         berr_exit_cleanup("accept error", sock, s);
-      } else {
-          printf("successfully connect to the client\n");
       }
-      printf("here\n");
 
-      if(SSL_get_peer_certificate(ssl) != NULL) {
+      X509 *peer;
+      if((peer = SSL_get_peer_certificate(ssl)) != NULL) {
         if (SSL_get_verify_result(ssl) != X509_V_OK) {
-          berr_exit("ECE568-CLIENT: Certificate does not verify");
+          berr_exit("Certificate does not verify");
         } else {
-          check_cert(ssl);
+          check_cert(ssl, peer);
         }
       } else {
-        printf("ssl null\n");
+        printf("ERROR: ssl null\n");
       }
 
       len = recv(s, &buf, 255, 0);
       buf[len]= '\0';
       printf(FMT_OUTPUT, buf, answer);
       send(s, answer, strlen(answer), 0);
+
+      ssl_shutdown(ssl, s);
 
       // Cleanup
       SSL_free(ssl);
