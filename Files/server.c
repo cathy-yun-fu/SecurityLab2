@@ -54,23 +54,45 @@ int berr_exit_cleanup(char *string, int sock, int s){
   exit(0);
 }
 
-void check_cert(SSL* ssl, struct sockaddr_in* addr)
+//int check_cert(int preverify_ok, X509_STORE_CTX *ctx) {
+//  printf("checking certificate...");
+//  X509 *peer;
+//  char peer_CN[256];
+//  char peer_email[256];
+//
+//  /*Check the cert chain. The chain length
+//    is automatically checked by OpenSSL when
+//    we set the verify depth in the ctx */
+//  /*Check the common name*/
+//  peer=SSL_get_peer_certificate(ssl);
+//  // I cannot get any info from these functions... not sure whats going on...
+//  X509_NAME_get_text_by_NID(X509_get_subject_name(peer),NID_commonName, peer_CN, 256);
+//  X509_NAME_get_text_by_NID(X509_get_subject_name(peer),NID_pkcs9_emailAddress, peer_email, 256);
+//
+//  printf(FMT_CLIENT_INFO, peer_CN, peer_email);
+//  return 1;
+//}
+void check_cert(SSL* ssl)
 { // ?
   X509 *peer;
   char peer_CN[256];
-  if(SSL_get_verify_result(ssl)!=X509_V_OK) {
-    berr_exit("ECE568-CLIENT: Certificate does not verify");
-  }
+  char peer_email[256];
+//  if(SSL_get_verify_result(ssl)!=X509_V_OK) {
+//    berr_exit("ECE568-CLIENT: Certificate does not verify");
+//  }
   /*Check the cert chain. The chain length
     is automatically checked by OpenSSL when
     we set the verify depth in the ctx */
   /*Check the common name*/
   peer=SSL_get_peer_certificate(ssl);
+  // I cannot get any info from these functions... not sure whats going on...
   X509_NAME_get_text_by_NID(X509_get_subject_name(peer),NID_commonName, peer_CN, 256);
-  if(strcasecmp(peer_CN,host)) {
-    berr_exit("Common name doesn't match host name");
-  }
+  X509_NAME_get_text_by_NID(X509_get_subject_name(peer),NID_pkcs9_emailAddress, peer_email, 256);
+
+  printf(FMT_CLIENT_INFO, peer_CN, peer_email);
 }
+
+
 
 void initOpenSSL(){
   if(!bio_err){
@@ -126,8 +148,8 @@ int main(int argc, char **argv)
     case 2:
       port=atoi(argv[1]);
       if (port<1||port>65535){
-	fprintf(stderr,"invalid port number");
-	exit(0);
+    fprintf(stderr,"invalid port number");
+    exit(0);
       }
       break;
     default:
@@ -143,7 +165,7 @@ int main(int argc, char **argv)
 
   initOpenSSL();
   setupSSLContext();
-  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_cert);
+//  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_cert);
 
   memset(&sin,0,sizeof(sin));
   sin.sin_addr.s_addr=INADDR_ANY;
@@ -192,31 +214,46 @@ int main(int argc, char **argv)
         switch(SSL_get_error(ssl, r)) {
           case SSL_ERROR_NONE:
             printf("ssl_error_none\n");
-            printf("Err_get_error: %d\n", ERR_get_error());
+            printf("Err_get_error: %lu\n", ERR_get_error());
             break;
           case SSL_ERROR_ZERO_RETURN:
             printf("ssl_error_zero_return\n");
-            printf("Err_get_error: %d\n", ERR_get_error());
+            printf("Err_get_error: %lu\n", ERR_get_error());
             break;
           case SSL_ERROR_SYSCALL:
             printf("ssl_error_syscall\n");
-            printf("Err_get_error: %d\n", ERR_get_error());
+            printf("Err_get_error: %lu\n", ERR_get_error());
             break;
           case SSL_ERROR_SSL:
             printf("ssl_error_ssl\n");
-            printf("Err_get_error: %d\n", ERR_get_error());
+            printf("Err_get_error: %lu\n", ERR_get_error());
             break;
           case SSL_ERROR_WANT_READ:
             printf("ssl_error_want_read\n");
-            printf("Err_get_error: %d\n", ERR_get_error());
+            printf("Err_get_error: %lu\n", ERR_get_error());
             break;
           default:
             printf("unknown error!\n");
-            printf("Err_get_error: %d\n", ERR_get_error());
+            printf("Err_get_error: %lu\n", ERR_get_error());
             break;
         }
         berr_exit_cleanup("accept error", sock, s);
+      } else {
+          printf("successfully connect to the client\n");
       }
+      printf("here\n");
+
+      SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
+      if(SSL_get_peer_certificate(ssl) != NULL) {
+        if (SSL_get_verify_result(ssl) != X509_V_OK) {
+          berr_exit("ECE568-CLIENT: Certificate does not verify");
+        } else {
+          check_cert(ssl);
+        }
+      } else {
+        printf("ssl null\n");
+      }
+
 
       len = recv(s, &buf, 255, 0);
       buf[len]= '\0';

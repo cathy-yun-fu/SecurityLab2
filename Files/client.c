@@ -59,12 +59,32 @@ int berr_exit_cleanup(char *string, int sock) {
   exit(0);
 }
 
-void check_cert(SSL* ssl, struct sockaddr_in* addr)
+//void check_cert(int preverify_ok, X509_STORE_CTX *ctx)
+//{
+//    X509 *peer;
+//    char peer_CN[256];
+//    char peer_email[256];
+//    /*Check the cert chain. The chain length
+//      is automatically checked by OpenSSL when
+//      we set the verify depth in the ctx */
+//    /*Check the common name*/
+//    peer=SSL_get_peer_certificate(ssl);
+//    X509_NAME_get_text_by_NID(X509_get_subject_name(peer),NID_commonName, peer_CN, 256);
+//    X509_NAME_get_text_by_NID(X509_get_subject_name(peer),NID_pkcs9_emailAddress, peer_email, 256);
+//    if(strcasecmp(peer_CN, "Bob's Server")) { // is this how you do cn checking....?
+//        berr_exit(FMT_CN_MISMATCH);
+//    }
+//    if(strcasecmp(peer_email, "ece568bob@ecf.utoronto.ca")) { // is this how you do cn checking....?
+//        berr_exit(FMT_EMAIL_MISMATCH);
+//    }
+//}
+
+void check_cert(SSL* ssl)
 { // ?
   X509 *peer;
   char peer_CN[256];
   if(SSL_get_verify_result(ssl)!=X509_V_OK) {
-    berr_exit("ECE568-CLIENT: Certificate does not verify");
+    berr_exit(FMT_NO_VERIFY);
   }
   /*Check the cert chain. The chain length
     is automatically checked by OpenSSL when
@@ -72,8 +92,8 @@ void check_cert(SSL* ssl, struct sockaddr_in* addr)
   /*Check the common name*/
   peer=SSL_get_peer_certificate(ssl);
   X509_NAME_get_text_by_NID(X509_get_subject_name(peer),NID_commonName, peer_CN, 256);
-  if(strcasecmp(peer_CN,host)) {
-    berr_exit("Common name doesn't match host name");
+  if(strcasecmp(peer_CN, "Bob's Server")) { // is this how you do cn checking....?
+    berr_exit(FMT_CN_MISMATCH);
   }
 }
 
@@ -85,13 +105,10 @@ void initOpenSSL(){
     bio_err=BIO_new_fp(stderr,BIO_NOCLOSE); /* An error write context */
     printf(FMT_OUTPUT, "Initializing OpenSSL","\0");
   }
-
-  /* Set up a SIGPIPE handler */ // ??? what is a sigpipe handler
-  //  signal(SIGPIPE,sigpipe_handle);
 }
 
 void setupSSLContext(){
-  SSL_METHOD* meth = SSLv23_client_method();
+  const SSL_METHOD* meth = SSLv23_client_method();
   ctx = SSL_CTX_new(meth); // sslv3 method
   if (! (SSL_CTX_use_certificate_chain_file(ctx,"./alice.pem"))){
     printf(FMT_OUTPUT, "Couldn't load certificate","\0");
@@ -116,10 +133,6 @@ void setupSSLContext(){
   #endif
 
   printf(FMT_OUTPUT, "Successfully set up SSL_CTX Object", "\0");
-
-}
-
-int verify_callback(int a, X509_STORE_CTX* ctx) {
 
 }
 
@@ -199,27 +212,27 @@ int main(int argc, char **argv)
     switch((j = SSL_get_error(ssl, r))) {
       case SSL_ERROR_NONE:
         printf("ssl_error_none\n");
-        printf("Err_get_error: %d\n", ERR_get_error());
+        printf("Err_get_error: %lu\n", ERR_get_error());
         break;
       case SSL_ERROR_ZERO_RETURN:
         printf("ssl_error_zero_return\n");
-        printf("Err_get_error: %d\n", ERR_get_error());
+        printf("Err_get_error: %lu\n", ERR_get_error());
         break;
       case SSL_ERROR_SYSCALL:
         printf("ssl_error_syscall\n");
-        printf("Err_get_error: %d\n", ERR_get_error());
+        printf("Err_get_error: %lu", ERR_get_error());
         break;
       case SSL_ERROR_SSL:
         printf("ssl_error_ssl\n");
-        printf("Err_get_error: %d\n", ERR_get_error());
+        printf("Err_get_error: %lu\n", ERR_get_error());
         break;
       case SSL_ERROR_WANT_READ:
         printf("ssl_error_want_read\n");
-        printf("Err_get_error: %d\n", ERR_get_error());
+        printf("Err_get_error: %lu\n", ERR_get_error());
         break;
       default:
         printf("unknown error!\n");
-        printf("Err_get_error: %d\n", ERR_get_error());
+        printf("Err_get_error: %lu\n", ERR_get_error());
         break;
     }
     printf("%d\n",j);
@@ -227,28 +240,35 @@ int main(int argc, char **argv)
     berr_exit_cleanup("accept error", sock);
   }
 
-  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback); // in progress
-  // https://wiki.openssl.org/index.php/Manual:SSL_CTX_set_verify(3)
 
-  if (SSL_get_peer_certicate(ssl) != NULL) {
-    check_cert(ssl, &addr);
-  } else {
-    printf(FMT_OUTPUT, "Could not get Peer Certificate","\0");
-    berr_exit_cleanup("Could not get Peer Certificate",sock);
+  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
+  if(SSL_get_peer_certificate(ssl) != NULL) {
+    check_cert(ssl);
   }
-
+//  if(SSL_get_peer_certificate(ssl) != NULL) {
+//    if (SSL_get_verify_result(ssl) != X509_V_OK) {
+//      berr_exit("ECE568-CLIENT: Certificate does not verify");
+//    }
+//  } else {
+//    printf("ssl is null\n");
+//    exit(0);
+//  }
   send(sock, secret, strlen(secret),0);
   len = recv(sock, &buf, 255, 0);
   buf[len]='\0';
-  
+
   /* this is how you output something for the marker to pick up */
   printf(FMT_OUTPUT, secret, buf);
 
+  while(1) {
+    int i = 0;
+    i = 1;
+  }
   // clean-up
   close(sock);
-  SSL_free(ssl);
-  BIO_free_all(sbio);
-  BIO_free_all(bio_err);
+//  SSL_free(ssl);
+//  BIO_free_all(sbio);
+//  BIO_free_all(bio_err);
   SSL_CTX_free(ctx);
   return 1;
 }
