@@ -15,6 +15,7 @@
 #include "openssl/x509.h"
 #include "openssl/x509_vfy.h"
 
+#include <unistd.h> // test
 // ALICE
 
 #define HOST "localhost"
@@ -185,12 +186,12 @@ int main(int argc, char **argv)
 
   if((sock=socket(AF_INET, SOCK_STREAM, IPPROTO_TCP))<0) {
     perror("socket");
-    printf(FMT_OUTPUT, "Socket Error","\0");
+//    printf(FMT_OUTPUT, "Socket Error","\0");
     berr_exit_cleanup("socket error", sock);
   }
   if(connect(sock,(struct sockaddr *)&addr, sizeof(addr))<0) {
     perror("connect");
-    printf(FMT_OUTPUT, "Connect Error","\0");
+//    printf(FMT_OUTPUT, "Connect Error","\0");
     berr_exit_cleanup("connect error", sock);
   }
 
@@ -244,16 +245,17 @@ int main(int argc, char **argv)
     check_cert(ssl, peer);
   }
 
-  send(sock, secret, strlen(secret),0);
-  len = recv(sock, &buf, 255, 0);
+  SSL_write(ssl, secret, strlen(secret));
+//  send(sock, secret, strlen(secret),0);
+  len = SSL_read(ssl,buf,255);
+//  len = recv(sock, &buf, 255, 0);
   buf[len]='\0';
 
   /* this is how you output something for the marker to pick up */
   printf(FMT_OUTPUT, secret, buf);
   ssl_shutdown(ssl, sock);
-
   close(sock);
-//  SSL_free(ssl);;
+  SSL_free(ssl);;
   SSL_CTX_free(ctx);
   return 1;
 }

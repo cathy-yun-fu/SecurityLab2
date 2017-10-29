@@ -236,10 +236,12 @@ int main(int argc, char **argv)
         printf("ERROR: ssl null\n");
       }
 
-      len = recv(s, &buf, 255, 0);
+//      len = recv(s, &buf, 25/5, 0);
+      len = SSL_read(ssl,buf,255);
       buf[len]= '\0';
       printf(FMT_OUTPUT, buf, answer);
-      send(s, answer, strlen(answer), 0);
+      SSL_write(ssl, answer, strlen(answer));
+//      send(s, answer, strlen(answer), 0);
 
       ssl_shutdown(ssl, s);
 
