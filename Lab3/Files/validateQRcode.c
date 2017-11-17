@@ -42,15 +42,13 @@ void initializeHMAC(char* secret_hex){
   base2SecretKey(secret_hex, secretKey); // base 2
 
   uint8_t padded_key[SHA1_BLOCKSIZE];
-  snprintf(padded_key, sizeof(secretKey),"%s",secretKey);
-
-  int length = sizeof(secretKey);
   int i = 0;
-  for (i = length; i < SHA1_BLOCKSIZE; i++){
+  for (i = 0; i < 10; i++){
+    padded_key[i] = secretKey[i];
+  }
+  for (i = 10; i < SHA1_BLOCKSIZE; i++){
     padded_key[i] = 0;
   }
-  printf("Padded Key: %s\n", padded_key);
-
 
   // IPAD , OPAD initialized
   for (i = 0; i < SHA1_BLOCKSIZE; i++) {
@@ -73,23 +71,27 @@ void computeSHA1(int step_value, uint8_t* shaOutput){
   SHA1_INFO  ctx;
 
   // INNER =====
-  // 32 bytes -> 4 values 8 bytes
-  uint8_t data_value[4];
-  data_value[3] = step_value & 0x000000ff;
-  data_value[2] = step_value & 0x0000ff00;
-  data_value[1] = step_value & 0x00ff0000;
-  data_value[0] = step_value & 0xff000000;
+  // has to be 8
+  uint8_t data_value[8];
+  data_value[7] = step_value & 0x000000ff;
+  data_value[6] = step_value & 0x0000ff00;
+  data_value[5] = step_value & 0x00ff0000;
+  data_value[4] = step_value & 0xff000000;
+  data_value[3] = 0;
+  data_value[2] = 0;
+  data_value[1] = 0;
+  data_value[0] = 0;
 
   uint8_t shaInnerOutput[SHA1_DIGEST_LENGTH];
   sha1_init(&ctx);
   sha1_update(&ctx, innerSHA, SHA1_BLOCKSIZE);
-  sha1_update(&ctx, data_value, sizeof(data_value));
+  sha1_update(&ctx, data_value, 8);
   sha1_final(&ctx, shaInnerOutput);
 
   // OUTER =====
   sha1_init(&ctx);
   sha1_update(&ctx, outerSHA, SHA1_BLOCKSIZE);
-  sha1_update(&ctx, shaInnerOutput, sizeof(shaInnerOutput));
+  sha1_update(&ctx, shaInnerOutput,20);
   sha1_final(&ctx, shaOutput);
 }
 
