@@ -15,10 +15,12 @@ const char* PERIOD = "&period=30";
 int getInt(char a){
 	int temp = a;
 	int value = 0;
-	if (temp <=57 && temp >=48){
-		value = (temp - 48);
-	} else if (temp >=65 && temp <=70){
-		value = (temp - 65) + 10;
+	if (temp <='9' && temp >='0'){
+		value = (temp - '0');
+	} else if (temp >='A' && temp <='F'){
+		value = (temp - 'A') + 10;
+	} else if (temp >='a' && temp <='f'){
+		value = (temp - 'a') + 10;
 	}
 	return value;
 }
@@ -58,7 +60,7 @@ main(int argc, char * argv[]) {
 	const char *encoded_issuer = urlEncode(issuer);
 	const char *encoded_accountName = urlEncode(accountName);
 
-  // encode key 32 base encoding
+	// encode key 32 base encoding
 	uint8_t secretKey[10];
 	encodeSecretKey(secret_hex, secretKey); // base 2
 
@@ -76,9 +78,11 @@ main(int argc, char * argv[]) {
 
 	char URL_hotp[length_hotp+1];
 	char URL_totp[length_totp+1];
-	
-	snprintf(URL_hotp, sizeof(URL_hotp),"%s%s%s%s%s%s%s",HOTP,encoded_accountName,ISSUER_PREFIX,encoded_issuer,SECRET_PREFIX,encoded_key,COUNTER);
-  snprintf(URL_totp, sizeof(URL_totp),"%s%s%s%s%s%s%s",TOTP,encoded_accountName,ISSUER_PREFIX,encoded_issuer,SECRET_PREFIX,encoded_key,PERIOD);
+
+	snprintf(URL_hotp, sizeof(URL_hotp),"%s%s%s%s%s%s%s",HOTP,encoded_accountName,ISSUER_PREFIX,
+					 encoded_issuer,SECRET_PREFIX,encoded_key,COUNTER);
+	snprintf(URL_totp, sizeof(URL_totp),"%s%s%s%s%s%s%s",TOTP,encoded_accountName,ISSUER_PREFIX,
+					 encoded_issuer,SECRET_PREFIX,encoded_key,PERIOD);
 
 	// Create an otpauth:// URI and display a QR code that's compatible
 	// with Google Authenticator

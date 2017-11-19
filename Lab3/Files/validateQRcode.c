@@ -14,14 +14,15 @@ uint8_t outerSHA[SHA1_BLOCKSIZE];
 int getInt(char a){
   int temp = a;
   int value = 0;
-  if (temp <=57 && temp >=48){
-    value = (temp - 48);
-  } else if (temp >=65 && temp <=70){
-    value = (temp - 65) + 10;
+  if (temp <='9' && temp >='0'){
+    value = (temp - '0');
+  } else if (temp >='A' && temp <='F'){
+    value = (temp - 'A') + 10;
+  } else if (temp >='a' && temp <='f'){
+    value = (temp - 'a') + 10;
   }
   return value;
 }
-
 
 void base2SecretKey(const char* secret_hex, uint8_t* secretkey){
   int j = 0; //index into output
@@ -187,7 +188,7 @@ main(int argc, char * argv[]) {
   initializeHMAC(secret_hex);
 
   long n = time(NULL);
-  printf("time is %ld\n" , n);
+  //printf("time is %ld\n" , n);
   printf("\nSecret (Hex): %s\nHTOP Value: %s (%s)\nTOTP Value: %s (%s)\n\n",
          secret_hex,
          HOTP_value,
